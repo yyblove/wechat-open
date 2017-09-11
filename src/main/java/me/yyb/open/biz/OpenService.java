@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -385,5 +386,32 @@ public class OpenService {
         obj.put("text", msgMap);
         String sendUrl = "https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=" + object.getString("authorizer_access_token");
         String sendResult = restTemplate.postForObject(sendUrl, obj, String.class);
+    }
+
+    public void refresh(AuthorizationInfo info) {
+        String url = "https://api.weixin.qq.com/cgi-bin/component/api_authorizer_token?" +
+                "component_access_token=" + this.getComponentAccessToken();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("component_appid", Constants.APP_ID);
+        params.put("authorizer_appid", info.getAppId());
+        params.put("authorizer_refresh_token", info.getAccessToken());
+
+        String result = restTemplate.postForObject(url, params, String.class);
+        if (result.contains("authorizer_access_token")) {
+            JSONObject object = JSONObject.parseObject(result);
+            String accessToken = object.getString("authorizer_access_token");
+            Long expiresIn = object.getLong("expires_in");
+            String newRefreshToken = object.getString("authorizer_refresh_token");
+
+            Update update = new Update();
+            update.set("accessToken", accessToken);
+            update.set("expiresIn", expiresIn * 1000);
+            update.set("refreshToken", newRefreshToken);
+            update.set("updateTime", System.currentTimeMillis());
+            mongoTemplate.updateFirst(Query.query(Criteria.where("appId").is(info.getAppId())), update, AuthorizationInfo.class);
+        } else {
+            logger.error("刷新{}令牌错误", info.getAppId());
+        }
     }
 }
