@@ -60,11 +60,43 @@ public class OpenService {
      * @return
      */
     public String getPreAuthCode() {
-        String url = "https://api.weixin.qq.com/cgi-bin/component/api_create_preauthcode?component_access_token=" + getComponentAccessToken();
+        String url = "https://api.weixin.qq.com/cgi-bin/component/api_create_preauthcode?component_access_token={component_access_token}";
         Map<String, String> postData = Collections.singletonMap("component_appid", Constants.APP_ID);
-        String result = restTemplate.postForObject(url, postData, String.class);
+        String result = restTemplate.postForObject(url, postData, String.class, getComponentAccessToken());
         JSONObject object = JSON.parseObject(result);
         return object.getString("pre_auth_code");
+    }
+
+    private String getComponentVerifyTicket() {
+        if (componentVerifyTicket == null && StringUtils.isEmpty(componentVerifyTicket.getVerifyTicket())) {
+            this.componentVerifyTicket = mongoTemplate.findOne(Query.query(Criteria.where("name").is("COMPONENT_VERIFY_TICKET")), ComponentVerifyTicket.class);
+        }
+
+        if (this.componentVerifyTicket != null) {
+            return this.componentVerifyTicket.getVerifyTicket();
+        }
+
+        return null;
+    }
+
+
+    /**
+     * 更新ticket
+     *
+     * @param componentVerifyTicket
+     */
+    private void updateComponentVerifyTicket(String componentVerifyTicket) {
+        if (StringUtils.isEmpty(componentVerifyTicket)) return;
+
+        ComponentVerifyTicket ticket = mongoTemplate.findOne(Query.query(Criteria.where("name").is("COMPONENT_VERIFY_TICKET")), ComponentVerifyTicket.class);
+        if (ticket == null) {
+            ticket = new ComponentVerifyTicket();
+            ticket.setName("COMPONENT_VERIFY_TICKET");
+        }
+        ticket.setUpdateTime(System.currentTimeMillis());
+        ticket.setVerifyTicket(componentVerifyTicket);
+        mongoTemplate.save(ticket);
+        this.componentVerifyTicket = ticket;
     }
 
 
@@ -74,7 +106,7 @@ public class OpenService {
      * @return
      */
     public String getComponentAccessToken() {
-        if (componentVerifyTicket == null || StringUtils.isEmpty(componentVerifyTicket.getVerifyTicket())) return null;
+        if (StringUtils.isEmpty(getComponentVerifyTicket())) return null;
 
         if (componentAccessToken == null
                 || System.currentTimeMillis() - componentAccessToken.getCreateTime() >= componentAccessToken.getExpiresIn() - 20 * 60 * 1000) {
@@ -84,7 +116,7 @@ public class OpenService {
             Map<String, String> postData = new HashMap<>();
             postData.put("component_appid", Constants.APP_ID);
             postData.put("component_appsecret", Constants.APP_SECRET);
-            postData.put("component_verify_ticket", this.componentVerifyTicket.getVerifyTicket());
+            postData.put("component_verify_ticket", getComponentVerifyTicket());
 
             String result = restTemplate.postForObject(url, postData, String.class);
 
@@ -146,14 +178,13 @@ public class OpenService {
      * @return
      */
     public Authorizer getAuthorizer(AuthorizationInfo authorizationInfo) {
-        String url = "https://api.weixin.qq.com/cgi-bin/component/api_get_authorizer_info" +
-                "?component_access_token=" + getComponentAccessToken();
+        String url = "https://api.weixin.qq.com/cgi-bin/component/api_get_authorizer_info?component_access_token={component_access_token}";
 
         Map<String, String> params = new HashMap<>();
         params.put("component_appid", Constants.APP_ID);
         params.put("authorizer_appid", authorizationInfo.getAppId());
 
-        String result = restTemplate.postForObject(url, params, String.class);
+        String result = restTemplate.postForObject(url, params, String.class, getComponentAccessToken());
         result = new String(result.getBytes(Charset.forName("ISO-8859-1")), Charset.forName("UTF-8"));
         if (result.contains("authorizer_info")) {
 
@@ -243,24 +274,6 @@ public class OpenService {
         }
     }
 
-    /**
-     * 更新ticket
-     *
-     * @param componentVerifyTicket
-     */
-    private void updateComponentVerifyTicket(String componentVerifyTicket) {
-        if (StringUtils.isEmpty(componentVerifyTicket)) return;
-
-        ComponentVerifyTicket ticket = mongoTemplate.findOne(Query.query(Criteria.where("name").is("COMPONENT_VERIFY_TICKET")), ComponentVerifyTicket.class);
-        if (ticket == null) {
-            ticket = new ComponentVerifyTicket();
-            ticket.setName("COMPONENT_VERIFY_TICKET");
-        }
-        ticket.setUpdateTime(System.currentTimeMillis());
-        ticket.setVerifyTicket(componentVerifyTicket);
-        mongoTemplate.save(ticket);
-        this.componentVerifyTicket = ticket;
-    }
 
     /**
      * 处理取消授权通知
@@ -431,11 +444,11 @@ public class OpenService {
      */
     private void replyApiTextMessage(String authCode, String toUserName) {
         // 先通过 authCode 获取到公众号的 accessToken
-        String accessTokenUrl = "https://api.weixin.qq.com/cgi-bin/component/api_query_auth?component_access_token=" + this.getComponentAccessToken();
+        String accessTokenUrl = "https://api.weixin.qq.com/cgi-bin/component/api_query_auth?component_access_token={component_access_token}";
         Map<String, String> params = new HashMap<>();
         params.put("component_appid", Constants.APP_ID);
         params.put("authorization_code", authCode);
-        String accessTokenResult = restTemplate.postForObject(accessTokenUrl, params, String.class);
+        String accessTokenResult = restTemplate.postForObject(accessTokenUrl, params, String.class, getComponentAccessToken());
         logger.info("-->> 全网发布api检测: {}", accessTokenResult);
         JSONObject object = JSONObject.parseObject(accessTokenResult);
 
@@ -449,21 +462,20 @@ public class OpenService {
         obj.put("touser", toUserName);
         obj.put("msgtype", "text");
         obj.put("text", msgMap);
-        String sendUrl = "https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=" + authorizationInfo.getString("authorizer_access_token");
-        String sendResult = restTemplate.postForObject(sendUrl, obj, String.class);
+        String sendUrl = "https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token={access_token}";
+        String sendResult = restTemplate.postForObject(sendUrl, obj, String.class, authorizationInfo.getString("authorizer_access_token"));
         logger.info("-->> 全网检测发送消息: {}", sendResult);
     }
 
     public void refresh(AuthorizationInfo info) {
-        String url = "https://api.weixin.qq.com/cgi-bin/component/api_authorizer_token?" +
-                "component_access_token=" + this.getComponentAccessToken();
+        String url = "https://api.weixin.qq.com/cgi-bin/component/api_authorizer_token?component_access_token={component_access_token}";
 
         Map<String, String> params = new HashMap<>();
         params.put("component_appid", Constants.APP_ID);
         params.put("authorizer_appid", info.getAppId());
         params.put("authorizer_refresh_token", info.getAccessToken());
 
-        String result = restTemplate.postForObject(url, params, String.class);
+        String result = restTemplate.postForObject(url, params, String.class, this.getComponentAccessToken());
         if (result.contains("authorizer_access_token")) {
             JSONObject object = JSONObject.parseObject(result);
             String accessToken = object.getString("authorizer_access_token");
