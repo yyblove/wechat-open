@@ -374,7 +374,10 @@ public class OpenService {
         params.put("component_appid", Constants.APP_ID);
         params.put("authorization_code", authCode);
         String accessTokenResult = restTemplate.postForObject(accessTokenUrl, params, String.class);
+        logger.info("-->> 全网发布api检测: {}", accessTokenResult);
         JSONObject object = JSONObject.parseObject(accessTokenResult);
+
+        JSONObject authorizationInfo = object.getJSONObject("authorization_info");
 
         // 通过公众号的accessToken调用客服接口发送消息
         Map<String, Object> obj = new HashMap<String, Object>();
@@ -384,8 +387,9 @@ public class OpenService {
         obj.put("touser", toUserName);
         obj.put("msgtype", "text");
         obj.put("text", msgMap);
-        String sendUrl = "https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=" + object.getString("authorizer_access_token");
+        String sendUrl = "https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=" + authorizationInfo.getString("authorizer_access_token");
         String sendResult = restTemplate.postForObject(sendUrl, obj, String.class);
+        logger.info("-->> 全网检测发送消息: {}", sendResult);
     }
 
     public void refresh(AuthorizationInfo info) {
