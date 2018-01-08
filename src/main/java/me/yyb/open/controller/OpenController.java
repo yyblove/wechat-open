@@ -9,10 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
@@ -63,7 +60,7 @@ public class OpenController {
         return view;
     }
 
-    @GetMapping("/open/event/authorize")
+    @PostMapping("/open/event/authorize")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void doEventAuthorize(HttpServletRequest request, HttpServletResponse response) throws IOException {
         try {
@@ -75,7 +72,7 @@ public class OpenController {
         }
     }
 
-    @GetMapping("/open/{appId}/callback")
+    @PostMapping("/open/{appId}/callback")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void callback(HttpServletRequest request, HttpServletResponse response) throws DocumentException, AesException, IOException {
         openService.processMessageAndEvent(request, response);
