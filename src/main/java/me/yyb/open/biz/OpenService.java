@@ -9,6 +9,7 @@ import me.yyb.open.domain.ComponentVerifyTicket;
 import me.yyb.open.pojo.ComponentAccessToken;
 import me.yyb.open.utils.Constants;
 import me.yyb.open.utils.OpenUtils;
+import me.yyb.open.vo.TextMessage;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.dom4j.DocumentException;
@@ -292,7 +293,7 @@ public class OpenService {
      * @throws AesException
      * @throws DocumentException
      */
-    public void processMessageAndEvent(HttpServletRequest request, HttpServletResponse response) throws IOException, AesException, DocumentException {
+    public void processMessageAndEvent(String appId, HttpServletRequest request, HttpServletResponse response) throws IOException, AesException, DocumentException {
         String token = Constants.TOKEN;
         String nonce = request.getParameter("nonce");
         String timestamp = request.getParameter("timestamp");
@@ -308,40 +309,101 @@ public class OpenService {
             Map<String, String> map = OpenUtils.decryptMsgToMap(msgSignature, timestamp, nonce, xml);
             logger.info("--->>> processMessageAndEvent: {}", map.toString());
 
-            String msgType = map.get("MsgType");
             String toUserName = map.get("ToUserName");
-            String fromUserName = map.get("FromUserName");
 
             // 微信全网测试: gh_3c884a361561 微信专用测试公众号；  gh_8dad206e9538 微信专用测试小程序
             if (StringUtils.equals(toUserName, Constants.MP_USERNAME) || StringUtils.equals(toUserName, Constants.MINI_USERNAME)) {
-
-                if ("event".equalsIgnoreCase(msgType)) {
-
-                    // 全网检测的模拟粉丝点击事件，只要返回文本消息：事件名称+"from_callback"
-                    String event = map.get("Event");
-                    replyTextMessage(response, OpenUtils.generateTextXML(fromUserName, toUserName, event + "from_callback"));
-
-                } else if ("text".equalsIgnoreCase(msgType)) {
-                    String content = map.get("Content");
-
-                    if ("TESTCOMPONENT_MSG_TYPE_TEXT".equalsIgnoreCase(content)) {
-
-                        //全网检测的模拟模板消息，只要返回文本消息： 内容 + "_callback"
-                        replyTextMessage(response, OpenUtils.generateTextXML(fromUserName, toUserName, content + "_callback"));
-                    } else if (StringUtils.startsWithIgnoreCase(content, "QUERY_AUTH_CODE")) {
-
-                        // 模拟粉丝发送文本消息给专用测试公众号，第三方平台方需在5秒内返回空串表明暂时不回复，然后再立即使用客服消息接口发送消息回复粉丝
-                        this.output(response, "");
-                        String msg = content.split(":")[1];
-                        // 调用客服接口回复消息
-                        this.replyApiTextMessage(msg, fromUserName);
-                    }
-                }
+                // 微信全网发布检测的
+                this.wxAllNetworkCheck(map, response);
             } else {
-                // TODO 其他绑定的公众号处理
-                this.output(response, "");
+                // 公众号消息事件处理
+                this.mpMessageAndEvent(appId, map, response);
             }
         }
+    }
+
+    /**
+     * 微信全网发布检测
+     */
+    private void wxAllNetworkCheck(Map<String, String> map, HttpServletResponse response) throws IOException, AesException {
+        String msgType = map.get("MsgType");
+        String toUserName = map.get("ToUserName");
+        String fromUserName = map.get("FromUserName");
+
+        if ("event".equalsIgnoreCase(msgType)) {
+
+            // 全网检测的模拟粉丝点击事件，只要返回文本消息：事件名称+"from_callback"
+            String event = map.get("Event");
+            replyTextMessage(response, OpenUtils.generateTextXML(fromUserName, toUserName, event + "from_callback"));
+
+        } else if ("text".equalsIgnoreCase(msgType)) {
+            String content = map.get("Content");
+
+            if ("TESTCOMPONENT_MSG_TYPE_TEXT".equalsIgnoreCase(content)) {
+
+                //全网检测的模拟模板消息，只要返回文本消息： 内容 + "_callback"
+                replyTextMessage(response, OpenUtils.generateTextXML(fromUserName, toUserName, content + "_callback"));
+            } else if (StringUtils.startsWithIgnoreCase(content, "QUERY_AUTH_CODE")) {
+
+                // 模拟粉丝发送文本消息给专用测试公众号，第三方平台方需在5秒内返回空串表明暂时不回复，然后再立即使用客服消息接口发送消息回复粉丝
+                this.output(response, "");
+                String msg = content.split(":")[1];
+                // 调用客服接口回复消息
+                this.replyApiTextMessage(msg, fromUserName);
+            }
+        }
+    }
+
+
+    /**
+     * 公众号事件处理
+     */
+    private void mpMessageAndEvent(String appId, Map<String, String> map, HttpServletResponse response) throws IOException, AesException {
+        String msgType = map.get("MsgType");
+        String toUserName = map.get("ToUserName");
+        String fromUserName = map.get("FromUserName");
+        switch (msgType) {
+            case "text":
+                // 文本消息
+                TextMessage textMessage = new TextMessage();
+                textMessage.setContent("hello world!");
+                textMessage.setToUserName(fromUserName);
+                textMessage.setFromUserName(toUserName);
+                this.replyTextMessage(response, textMessage.parseToXML());
+                return;
+
+            case "image":
+                // 图片消息
+            case "voice":
+                // 音频消息
+            case "video":
+                // 视频消息
+            case "shortvideo":
+                // 小视频消息
+            case "location":
+                // 地理位置消息
+            case "link":
+                // 链接消息
+            case "event":
+                // 事件
+                String event = map.get("Event").toLowerCase();
+                switch (event) {
+                    case "subscribe":
+                        // 关注事件
+                    case "unsubscribe":
+                        // 取关事件
+                    case "scan":
+                        // 扫描事件
+                    case "location":
+                        // 上报地理位置事件
+                    case "click":
+                        // 点击菜单拉取消息时的事件
+                    case "view":
+                        // 点击菜单跳转链接时的事件
+                }
+        }
+
+        this.output(response, "");
     }
 
     /**

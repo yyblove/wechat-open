@@ -74,8 +74,8 @@ public class OpenController {
 
     @PostMapping("/open/{appId}/callback")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void callback(HttpServletRequest request, HttpServletResponse response) throws DocumentException, AesException, IOException {
-        openService.processMessageAndEvent(request, response);
+    public void callback(@PathVariable String appId,  HttpServletRequest request, HttpServletResponse response) throws DocumentException, AesException, IOException {
+        openService.processMessageAndEvent(appId, request, response);
     }
 
 }
